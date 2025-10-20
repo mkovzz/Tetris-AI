@@ -199,6 +199,7 @@ def run(game_state):
                 running = False
                 break
         
+        update_game_state(game_state=game_state, delta=0.5)
         pygame.display.flip()
     
     pygame.quit()
@@ -206,10 +207,16 @@ def run(game_state):
 #Checks for line clears, game overs (piece is place above the grid), updates falling piece
 def update_game_state(game_state, delta):
     game = game_state
-    game.fall_time += delta
+    game.fall_time += delta #delta is number of ticks before the game will update (ticks are in ms in pygame)
 
     if game.fall_time >= game.fall_speed:
-        pass #TO BE COMPLETED
+        move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=1, rotation_change=0)
+
+
+        #Reset once the piece drops one row
+        game.fall_time = 0
+
+    return True
 
 
 #Tetris Classes
@@ -252,8 +259,10 @@ def get_piece_cells(piece) -> list:
     return cell_positions
 
 #Function for moving pieces
-def move_piece(game_state, piece, delta_x, delta_y, rotation_change):
+def move_piece(piece, game_state, delta_x, delta_y, rotation_change):
     game = game_state
+    
+    #Deep copy the piece to cleanly handle position updates and rotations
     updated_piece = copy.deepcopy(piece)
     updated_piece.x += delta_x
     updated_piece.y += delta_y
@@ -262,7 +271,7 @@ def move_piece(game_state, piece, delta_x, delta_y, rotation_change):
         possible_rotations = TETROMINOES.get(updated_piece.shape)
         updated_piece.rotation = (updated_piece.rotation + rotation_change) % len(possible_rotations)
 
-    if is_valid_position(updated_piece):
+    if is_valid_position(game, updated_piece):
         game.current_piece = updated_piece
         return True
 
@@ -271,7 +280,15 @@ def move_piece(game_state, piece, delta_x, delta_y, rotation_change):
 #Verifiying if the piece is in a valid position
 def is_valid_position(game_state, piece):
     game = game_state
-    #TO BE COMPLETED
+    piece_cells = get_piece_cells(piece)
+
+    for (x, y) in piece_cells:
+        if x < 0 or x > GRID_WIDTH or y >= GRID_HEIGHT:
+            return False
+        if y >= 0 and game.grid[y][x] != 0:
+            return False
+        
+    return True
 
 def main():
     starting_piece = Tetromino()
