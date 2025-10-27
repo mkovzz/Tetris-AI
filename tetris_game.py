@@ -67,11 +67,6 @@ TETROMINOES = {
          ".....",
          "....."],
         [".....",
-         "..#..",
-         "..#..",
-         ".##..",
-         "....."],
-        [".....",
          "..##.",
          "..#..",
          "..#..",
@@ -80,6 +75,11 @@ TETROMINOES = {
          ".....",
          ".###.",
          "...#.",
+         "....."],
+         [".....",
+         "..#..",
+         "..#..",
+         ".##..",
          "....."]],
     "Z": [
         [".....",
@@ -115,14 +115,14 @@ TETROMINOES = {
          ".###.",
          ".....",
          "....."],
-        [".....",
-         ".....",
-         ".###.",
+         [".....",
+         "..#..",
+         "..##.",
          "..#..",
          "....."],
         [".....",
-         "..#..",
-         "..##.",
+         ".....",
+         ".###.",
          "..#..",
          "....."],
         [".....",
@@ -133,7 +133,7 @@ TETROMINOES = {
 }
 
 shapes = ['I', 'L', 'J', 'Z', 'S', 'O', 'T']
-shape_colours = [CYAN, ORANGE, BLUE, GREEN, RED, YELLOW, PURPLE]
+shape_colors = [CYAN, ORANGE, BLUE, GREEN, RED, YELLOW, PURPLE]
 
 #Pygame Display Initialization
 pygame.display.set_caption("Tetris")
@@ -180,6 +180,8 @@ def draw(game_state):
             )
             pygame.draw.rect(screen, game.current_piece.color, falling_piece)
             pygame.draw.rect(screen, WHITE, falling_piece, width=1) #Border of the piece 
+
+    #Drawing the shadow of the falling piece
             
     #Displaying UI elements
     score_text = game_ui_font.render(f"Score: {game.score}", True, WHITE)
@@ -188,36 +190,77 @@ def draw(game_state):
     screen.blit(score_text, (600, 100))
     screen.blit(level_text, (600, 150))
     screen.blit(lines_text, (600, 200))
+    pygame.display.flip()
 
 def run(game_state):
+    game = game_state
+    clock = pygame.time.Clock()
     running = True
-    while running:
-        draw(game_state)
-        key = pygame.key.get_pressed()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-                break
-        
-        update_game_state(game_state=game_state, delta=0.5)
-        pygame.display.flip()
     
+    while running:
+        tick_time = clock.tick(20)
+
+        if handle_inputs(game) == False:
+            break
+
+        if update_game_state(game, tick=tick_time) == False:
+            print("Game Over!")
+            running = False
+        
+        draw(game)
+
     pygame.quit()
 
-#Checks for line clears, game overs (piece is place above the grid), updates falling piece
-def update_game_state(game_state, delta):
+def handle_inputs(game_state) -> bool:
     game = game_state
-    game.fall_time += delta #delta is number of ticks before the game will update (ticks are in ms in pygame)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return False
+        
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=0, rotation_change=1)
+            elif event.key == pygame.K_SPACE:
+                hard_drop(game)
+                update_game_state(game, game.fall_speed)
+
+    #Out of the loop to allow for holding the keys down since it checks each frame
+    keys = pygame.key.get_pressed()
+
+    if keys[pygame.K_LEFT]:
+        move_piece(piece=game.current_piece, game_state=game, delta_x=-1, delta_y=0, rotation_change=0)
+    elif keys[pygame.K_RIGHT]:
+        move_piece(piece=game.current_piece, game_state=game, delta_x=1, delta_y=0, rotation_change=0)
+    elif keys[pygame.K_DOWN]:
+        move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=1, rotation_change=0)
+    
+    return True
+
+#Checks for line clears, game overs (piece is place above the grid), updates falling piece
+def update_game_state(game_state, tick) -> bool:
+    game = game_state
+    game.fall_time += tick #delta is number of ticks before the game will update (ticks are in ms in pygame)
 
     if game.fall_time >= game.fall_speed:
-        move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=1, rotation_change=0)
+        #Checking if the piece will hit the bottom when it moves down
+        if move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=1, rotation_change=0) == False:
 
+            #Placing a piece and clearing its lines
+            place_piece(game, game.current_piece)
+            clear_lines(game)
+
+            #get a new random piece
+            game.current_piece = game.next_piece
+            game.next_piece = Tetromino()
+
+            #Checking if the new piece will fit on the board, game over if not
+            if is_valid_position(game, game.current_piece) == False:
+                return False
 
         #Reset once the piece drops one row
         game.fall_time = 0
 
     return True
-
 
 #Tetris Classes
 #Information about current game
@@ -235,15 +278,15 @@ class TetrisGame:
 #Information about pieces
 class Tetromino:
     def __init__(self):
-        self.shape = get_new_piece() #Selecting a random tetromino
+        self.shape = select_random_piece() #Selecting a random tetromino
         self.rotation = 0
         self.x = 0
         self.y = 0
-        self.color = shape_colours[shapes.index(self.shape)] #gets the color that maps to the specific shape
+        self.color = shape_colors[shapes.index(self.shape)] #gets the color that maps to the specific shape
 
 #Tetris Functions
-#Selection of a random piece
-def get_new_piece() -> str:
+#Gets a random index in the piece and color array
+def select_random_piece() -> str:
     index = random.randint(0, 6)
     return shapes[index]
 
@@ -259,7 +302,7 @@ def get_piece_cells(piece) -> list:
     return cell_positions
 
 #Function for moving pieces
-def move_piece(piece, game_state, delta_x, delta_y, rotation_change):
+def move_piece(piece, game_state, delta_x, delta_y, rotation_change) -> bool:
     game = game_state
     
     #Deep copy the piece to cleanly handle position updates and rotations
@@ -277,25 +320,52 @@ def move_piece(piece, game_state, delta_x, delta_y, rotation_change):
 
     return False
 
-#Verifiying if the piece is in a valid position
-def is_valid_position(game_state, piece):
+#Automatically place the piece at the bottom
+def hard_drop(game_state):
+    game = game_state
+    while move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=1, rotation_change=0):
+        pass #give 2 points per each cell
+
+#Verifying if the piece is in a valid position
+def is_valid_position(game_state, piece) -> bool:
     game = game_state
     piece_cells = get_piece_cells(piece)
 
     for (x, y) in piece_cells:
-        if x < 0 or x > GRID_WIDTH or y >= GRID_HEIGHT:
+        if x < 0 or x >= GRID_WIDTH or y >= GRID_HEIGHT:
             return False
         if y >= 0 and game.grid[y][x] != 0:
             return False
         
     return True
 
+#keeps piece in place when it reaches a surface
+def place_piece(game_state, piece) -> None:
+    game = game_state
+    piece_cells = get_piece_cells(piece)
+
+    for (x, y) in piece_cells:
+        if y >= 0:
+            game.grid[y][x] = piece.color
+
+#clears a line if it exists
+def clear_lines(game_state) -> None:
+    game = game_state
+    for y in range(GRID_HEIGHT):
+        cells_filled = 0
+        for x in range(GRID_WIDTH):
+            if game.grid[y][x] != 0:
+                cells_filled += 1
+        
+        if cells_filled == 10:
+            game.grid.pop(y)
+            game.grid.insert(0, ([0] * 10))
+
 def main():
     starting_piece = Tetromino()
     next_starting_piece = Tetromino()
     game = TetrisGame(current_tetromino=starting_piece, next_tetromino=next_starting_piece)
     run(game)
-    print(starting_piece.colour, next_starting_piece.colour)
 
 if __name__ == "__main__":
     main()
