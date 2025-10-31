@@ -30,78 +30,78 @@ RED = (255, 0, 0)
 TETROMINOES = {
     "I": [
         [".....",
+         "..#..",
+         "..#..",
+         "..#..",
+         "..#.."],
+         [".....",
          ".....",
          "####.",
          ".....",
-         "....."],
-        [".....",
-         "..#..",
-         "..#..",
-         "..#..",
-         "..#.."]],
+         "....."]],
     "L": [
-        [".....",
-         "...#.",
-         ".###.",
-         ".....",
-         "....."],
-        [".....",
-         "..#..",
-         "..#..",
-         "..##.",
-         "....."],
-        [".....",
-         ".....",
-         ".###.",
-         ".#...",
-         "....."],
         [".....",
          ".##..",
          "..#..",
          "..#..",
-         "....."]],
-    "J": [
-        [".....",
+         "....."],
+         [".....",
+         ".....",
+         ".###.",
          ".#...",
+         "....."],
+         [".....",
+         "..#..",
+         "..#..",
+         "..##.",
+         "....."],
+         [".....",
+         "...#.",
          ".###.",
          ".....",
-         "....."],
-        [".....",
-         "..##.",
+         "....."]],
+    "J": [
+         [".....",
          "..#..",
          "..#..",
+         ".##..",
          "....."],
-        [".....",
+         [".....",
          ".....",
          ".###.",
          "...#.",
          "....."],
          [".....",
+         "..##.",
          "..#..",
          "..#..",
-         ".##..",
+         "....."],
+         [".....",
+         ".#...",
+         ".###.",
+         ".....",
          "....."]],
     "Z": [
-        [".....",
-         ".....",
-         ".##..",
-         "..##.",
-         "....."],
         [".....",
          "..#..",
          ".##..",
          ".#...",
+         "....."],
+         [".....",
+         ".....",
+         ".##..",
+         "..##.",
          "....."]],
     "S": [
-        [".....",
-         ".....",
-         "..##.",
-         ".##..",
-         "....."],
         [".....",
          "..#..",
          "..##.",
          "...#.",
+         "....."],
+         [".....",
+         ".....",
+         "..##.",
+         ".##..",
          "....."]],
     "O": [
         [".....",
@@ -112,23 +112,23 @@ TETROMINOES = {
     "T": [
         [".....",
          "..#..",
-         ".###.",
+         ".##..",
+         "..#..",
+         "....."],
+         [".....",
          ".....",
+         ".###.",
+         "..#..",
          "....."],
          [".....",
          "..#..",
          "..##.",
          "..#..",
          "....."],
-        [".....",
-         ".....",
+         [".....",
+         "..#..",
          ".###.",
-         "..#..",
-         "....."],
-        [".....",
-         "..#..",
-         ".##..",
-         "..#..",
+         ".....",
          "....."]],
 }
 
@@ -182,7 +182,29 @@ def draw(game_state):
             pygame.draw.rect(screen, WHITE, falling_piece, width=1) #Border of the piece 
 
     #Drawing the shadow of the falling piece
+    ghost_piece_cells = get_piece_cells(game.ghost_piece)
+
+    #Need to create another surface to support the changing opacity of the ghost pieces
+    ghost_surface = pygame.Surface(
+        (GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE),
+        pygame.SRCALPHA
+    )
+
+    for (x, y) in ghost_piece_cells:
+        if y >= 0:
+            piece_outline = pygame.Rect(
+                x * CELL_SIZE,
+                y * CELL_SIZE,
+                CELL_SIZE,
+                CELL_SIZE
+            )
+            #Casting the tuple to a pygame color object so that the transparency can be changed
+            translucent_color = (*game.ghost_piece.color, 80)
+            pygame.draw.rect(ghost_surface, translucent_color, piece_outline)
             
+    #drawing this surface onto the main surface onto the offset (top left of the grid)
+    screen.blit(ghost_surface, (GRID_X_OFFSET, GRID_Y_OFFSET))
+
     #Displaying UI elements
     score_text = game_ui_font.render(f"Score: {game.score}", True, WHITE)
     level_text = game_ui_font.render(f"Level: {game.level}", True, WHITE)
@@ -222,7 +244,6 @@ def handle_inputs(game_state) -> bool:
                 move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=0, rotation_change=1)
             elif event.key == pygame.K_SPACE:
                 hard_drop(game)
-                update_game_state(game, game.fall_speed)
 
     #Out of the loop to allow for holding the keys down since it checks each frame
     keys = pygame.key.get_pressed()
@@ -241,6 +262,8 @@ def update_game_state(game_state, tick) -> bool:
     game = game_state
     game.fall_time += tick #delta is number of ticks before the game will update (ticks are in ms in pygame)
 
+    update_ghost_piece(game)
+
     if game.fall_time >= game.fall_speed:
         #Checking if the piece will hit the bottom when it moves down
         if move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=1, rotation_change=0) == False:
@@ -251,6 +274,7 @@ def update_game_state(game_state, tick) -> bool:
 
             #get a new random piece
             game.current_piece = game.next_piece
+            game.ghost_piece = copy.deepcopy(game.current_piece)
             game.next_piece = Tetromino()
 
             #Checking if the new piece will fit on the board, game over if not
@@ -259,7 +283,7 @@ def update_game_state(game_state, tick) -> bool:
 
         #Reset once the piece drops one row
         game.fall_time = 0
-
+ 
     return True
 
 #Tetris Classes
@@ -268,6 +292,7 @@ class TetrisGame:
     def __init__(self, current_tetromino, next_tetromino):
         self.grid = [[0 for i in range(GRID_WIDTH)] for j in range(GRID_HEIGHT)]
         self.current_piece = current_tetromino
+        self.ghost_piece = copy.deepcopy(current_tetromino)
         self.next_piece = next_tetromino
         self.score = 0
         self.level = 1
@@ -280,8 +305,8 @@ class Tetromino:
     def __init__(self):
         self.shape = select_random_piece() #Selecting a random tetromino
         self.rotation = 0
-        self.x = 0
-        self.y = 0
+        self.x = 2
+        self.y = -2
         self.color = shape_colors[shapes.index(self.shape)] #gets the color that maps to the specific shape
 
 #Tetris Functions
@@ -320,11 +345,33 @@ def move_piece(piece, game_state, delta_x, delta_y, rotation_change) -> bool:
 
     return False
 
+#for updating ghost piece efficiently
+def update_ghost_piece(game_state) -> None:
+    game = game_state
+    ghost = copy.deepcopy(game.current_piece)
+    while 1:
+        ghost.y += 1
+        if is_valid_position(game, ghost) == False:
+            ghost.y -= 1
+            break
+    game.ghost_piece = ghost
+
 #Automatically place the piece at the bottom
-def hard_drop(game_state):
+def hard_drop(game_state) -> None:
     game = game_state
     while move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=1, rotation_change=0):
         pass #give 2 points per each cell
+
+    place_piece(game, game.current_piece)
+    clear_lines(game)
+
+    game.current_piece = game.next_piece
+    game.ghost_piece = copy.deepcopy(game.current_piece)
+    game.next_piece = Tetromino()
+
+    if is_valid_position(game, game.current_piece) == False:
+        print("Game Over!")
+        pygame.quit()
 
 #Verifying if the piece is in a valid position
 def is_valid_position(game_state, piece) -> bool:
