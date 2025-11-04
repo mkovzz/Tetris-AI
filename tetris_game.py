@@ -145,7 +145,7 @@ game_ui_font = pygame.font.SysFont('Arial', 30)
 def draw(game_state): 
     game = game_state #Passing in the Tetris game class
     #Setting up the game UI
-    screen.fill(BLACK)
+    screen.fill((128, 128, 128))
     
     #Drawing the grid for the game
     grid_rect = pygame.Rect(
@@ -220,7 +220,7 @@ def run(game_state):
     running = True
     
     while running:
-        tick_time = clock.tick(20)
+        tick_time = clock.tick(30)
 
         if handle_inputs(game) == False:
             break
@@ -253,7 +253,8 @@ def handle_inputs(game_state) -> bool:
     elif keys[pygame.K_RIGHT]:
         move_piece(piece=game.current_piece, game_state=game, delta_x=1, delta_y=0, rotation_change=0)
     elif keys[pygame.K_DOWN]:
-        move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=1, rotation_change=0)
+        if move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=1, rotation_change=0):
+            game.score += 1
     
     return True
 
@@ -359,9 +360,14 @@ def update_ghost_piece(game_state) -> None:
 #Automatically place the piece at the bottom
 def hard_drop(game_state) -> None:
     game = game_state
+    
+    #Cells for score calculations
+    cells_before_drop = get_piece_cells(game.current_piece)
     while move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=1, rotation_change=0):
         pass #give 2 points per each cell
+    cells_after_drop = get_piece_cells(game.current_piece)
 
+    #Fixing piece in place then clearing
     place_piece(game, game.current_piece)
     clear_lines(game)
 
@@ -372,6 +378,12 @@ def hard_drop(game_state) -> None:
     if is_valid_position(game, game.current_piece) == False:
         print("Game Over!")
         pygame.quit()
+    
+    #Updating the score (2 per cell if hard drop)
+    #Get the highest cell of the piece before and after the drop; difference is score
+    min_before = min(cells_before_drop, key=lambda x: x[1])[1]
+    min_after = min(cells_after_drop, key=lambda x: x[1])[1]
+    game.score += 2 * (min_after - min_before)
 
 #Verifying if the piece is in a valid position
 def is_valid_position(game_state, piece) -> bool:
@@ -398,6 +410,7 @@ def place_piece(game_state, piece) -> None:
 #clears a line if it exists
 def clear_lines(game_state) -> None:
     game = game_state
+    rows_cleared = 0
     for y in range(GRID_HEIGHT):
         cells_filled = 0
         for x in range(GRID_WIDTH):
@@ -405,9 +418,19 @@ def clear_lines(game_state) -> None:
                 cells_filled += 1
         
         if cells_filled == 10:
+            rows_cleared += 1
             game.grid.pop(y)
             game.grid.insert(0, ([0] * 10))
-
+            
+    if rows_cleared == 1:
+        game.score += 100 * game.level
+    elif rows_cleared == 2:
+        game.score += 300 * game.level
+    elif rows_cleared == 3:
+        game.score += 500 * game.level
+    elif rows_cleared == 4:
+        game.score += 800 * game.level #multiplied by 1.5 if back-to-back difficult clears
+        
 def main():
     starting_piece = Tetromino()
     next_starting_piece = Tetromino()
