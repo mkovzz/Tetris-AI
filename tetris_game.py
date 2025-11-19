@@ -8,12 +8,16 @@ pygame.init()
 #Tetris Constants
 GRID_WIDTH = 10     #number of columns
 GRID_HEIGHT = 20    #number of rows
-CELL_SIZE = 30      #size of a cell (in pixels)
-GRID_X_OFFSET = 50  #Offset from topleft of window
+CELL_SIZE = 30      #size of a grid cell (in pixels)
+GRID_X_OFFSET = 230  #Offset from topleft of window
 GRID_Y_OFFSET = 50  #Offset from topleft of window 
+NEXT_BOX_X_OFFSET = 570
+NEXT_BOX_Y_OFFSET = 100 #Offsets for the box holding the next piece
+HOLD_BOX_X_OFFSET = 40
+HOLD_BOX_Y_OFFSET = 100
 
 #Pygame Constants
-SCREEN_WIDTH = 800
+SCREEN_WIDTH = 880
 SCREEN_HEIGHT = 700
 
 #Piece Colours
@@ -138,23 +142,107 @@ shape_colors = [CYAN, ORANGE, BLUE, GREEN, RED, YELLOW, PURPLE]
 #Pygame Display Initialization
 pygame.display.set_caption("Tetris")
 screen = pygame.display.set_mode(size=(SCREEN_WIDTH, SCREEN_HEIGHT), flags=pygame.RESIZABLE)
-game_ui_font = pygame.font.SysFont('Arial', 30)
+game_ui_font = pygame.font.SysFont('Showcard Gothic', 30)
 
 #Pygame Display Functions
 #Pass in game by reference
 def draw(game_state): 
-    game = game_state #Passing in the Tetris game class
-    #Setting up the game UI
-    screen.fill((128, 128, 128))
+    game = game_state
+    screen.fill((106, 106, 106))
     
-    #Drawing the grid for the game
+    #Drawing the grid background
+    grid_surface = pygame.Surface(
+        (GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE),
+        pygame.SRCALPHA
+    )
+
+    grid_background_color = (*WHITE, 190)
+    grid_surface.fill(color=grid_background_color)
+    screen.blit(grid_surface, (GRID_X_OFFSET, GRID_Y_OFFSET))
+
+    #Grid Lines
+    #Vertical lines
+    for x in range(GRID_WIDTH):
+        pygame.draw.line(
+            screen,
+            (200, 200, 200),
+            (x * CELL_SIZE + GRID_X_OFFSET, GRID_Y_OFFSET),
+            (x * CELL_SIZE + GRID_X_OFFSET, GRID_HEIGHT * CELL_SIZE + GRID_Y_OFFSET - 1),
+            1
+        )
+    
+    #Horizontal Lines
+    for y in range(GRID_HEIGHT):
+        pygame.draw.line(
+            screen,
+            (200, 200, 200),
+            (GRID_X_OFFSET, GRID_Y_OFFSET + y * CELL_SIZE),
+            (GRID_WIDTH * CELL_SIZE + GRID_X_OFFSET - 1, y * CELL_SIZE + GRID_Y_OFFSET),
+            1
+        )
+
+    #Drawing the grid border for the game
     grid_rect = pygame.Rect(
         GRID_X_OFFSET,
         GRID_Y_OFFSET,
         GRID_WIDTH * CELL_SIZE,
         GRID_HEIGHT * CELL_SIZE
     )
-    pygame.draw.rect(screen, WHITE, grid_rect, width=2)
+    pygame.draw.rect(screen, BLACK, grid_rect, width=4)
+
+    #Drawing the box for the next piece
+    next_box_surface = pygame.Surface(
+        (150, 150),
+        pygame.SRCALPHA
+    )
+
+    next_box_background_color = (*WHITE, 190)
+    next_box_surface.fill(color=next_box_background_color)
+    screen.blit(next_box_surface, (NEXT_BOX_X_OFFSET, NEXT_BOX_Y_OFFSET))
+
+    next_text = game_ui_font.render(f"NEXT", True, WHITE)
+    
+    #Displaying next piece in next box
+    #Finding the center of the box
+    next_piece_offset_x = 150 // 2 - (5 * CELL_SIZE)//2
+    next_piece_offset_y = 150 // 2 - (5 * CELL_SIZE)//2
+
+    next_piece_copy = copy.deepcopy(game.next_piece)
+    next_piece_copy.x = 0
+    next_piece_copy.y = 0
+
+    draw_small_tetromino(next_box_surface, next_piece_copy, next_piece_offset_x, next_piece_offset_y)
+    screen.blit(next_box_surface, (NEXT_BOX_X_OFFSET, NEXT_BOX_Y_OFFSET))
+
+    next_box_rect = pygame.Rect(
+        NEXT_BOX_X_OFFSET,
+        NEXT_BOX_Y_OFFSET,
+        150,
+        150
+    )
+    pygame.draw.rect(screen, BLACK, next_box_rect, width=2)
+
+    #Drawing the box for the hold piece
+    hold_box_surface = pygame.Surface(
+        (150, 150),
+        pygame.SRCALPHA
+    )
+
+    hold_box_background_color = (*WHITE, 190)
+    hold_box_surface.fill(color=hold_box_background_color)
+    screen.blit(hold_box_surface, (HOLD_BOX_X_OFFSET, HOLD_BOX_Y_OFFSET))
+    
+    hold_text = game_ui_font.render(f"HOLD", True, WHITE)
+
+    hold_text_rect = pygame.Rect(
+        HOLD_BOX_X_OFFSET,
+        HOLD_BOX_Y_OFFSET,
+        150,
+        150
+    )
+    pygame.draw.rect(screen, BLACK, hold_text_rect, width=2)
+    #Held piece in the hold box
+    #TODO 
 
     #Drawing filled cells
     for i in range(GRID_WIDTH):
@@ -167,6 +255,7 @@ def draw(game_state):
                     CELL_SIZE
                 )
                 pygame.draw.rect(screen, game.grid[j][i], filled_cell)
+                pygame.draw.rect(screen, BLACK, filled_cell, width=1)
 
     #Drawing falling piece
     piece_cells = get_piece_cells(game.current_piece)
@@ -179,7 +268,7 @@ def draw(game_state):
                 CELL_SIZE
             )
             pygame.draw.rect(screen, game.current_piece.color, falling_piece)
-            pygame.draw.rect(screen, WHITE, falling_piece, width=1) #Border of the piece 
+            pygame.draw.rect(screen, BLACK, falling_piece, width=1) #Border of the piece 
 
     #Drawing the shadow of the falling piece
     ghost_piece_cells = get_piece_cells(game.ghost_piece)
@@ -209,10 +298,30 @@ def draw(game_state):
     score_text = game_ui_font.render(f"Score: {game.score}", True, WHITE)
     level_text = game_ui_font.render(f"Level: {game.level}", True, WHITE)
     lines_text = game_ui_font.render(f"Lines Cleared: {game.lines_cleared}", True, WHITE)
-    screen.blit(score_text, (600, 100))
-    screen.blit(level_text, (600, 150))
-    screen.blit(lines_text, (600, 200))
+    screen.blit(score_text, (570, 400))
+    screen.blit(level_text, (570, 450))
+    screen.blit(lines_text, (570, 500))
+    screen.blit(next_text, (NEXT_BOX_X_OFFSET + 35, NEXT_BOX_Y_OFFSET - 30))
+    screen.blit(hold_text, (HOLD_BOX_X_OFFSET + 35, HOLD_BOX_Y_OFFSET - 30))
     pygame.display.flip()
+
+#For drawing the pieces in the next and hold box
+def draw_small_tetromino(surface, tetromino, x_offset, y_offset):
+    piece_cells = get_piece_cells(tetromino)
+    
+    for (x, y) in piece_cells:
+
+        relative_x = x - tetromino.x
+        relative_y = y - tetromino.y
+
+        drawn_piece = pygame.Rect(
+            x_offset + relative_x * CELL_SIZE,
+            y_offset + relative_y * CELL_SIZE,
+            CELL_SIZE,
+            CELL_SIZE
+        )
+        pygame.draw.rect(surface, tetromino.color, drawn_piece)
+        pygame.draw.rect(surface, BLACK, drawn_piece, 1)
 
 def run(game_state):
     game = game_state
