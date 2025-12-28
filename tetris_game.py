@@ -146,7 +146,7 @@ game_ui_font = pygame.font.SysFont('Showcard Gothic', 30)
 
 #Pygame Display Functions
 #Pass in game by reference
-def draw(game_state): 
+def draw(game_state):
     game = game_state
     screen.fill((106, 106, 106))
     
@@ -208,8 +208,8 @@ def draw(game_state):
     next_piece_offset_y = 150 // 2 - (5 * CELL_SIZE)//2
 
     next_piece_copy = copy.deepcopy(game.next_piece)
-    next_piece_copy.x = 0
-    next_piece_copy.y = 0
+    next_piece_copy.x = 1
+    next_piece_copy.y = 1
 
     draw_small_tetromino(next_box_surface, next_piece_copy, next_piece_offset_x, next_piece_offset_y)
     screen.blit(next_box_surface, (NEXT_BOX_X_OFFSET, NEXT_BOX_Y_OFFSET))
@@ -234,6 +234,19 @@ def draw(game_state):
     
     hold_text = game_ui_font.render(f"HOLD", True, WHITE)
 
+    #Held piece in hold box, only drawn if player decides to hold a piece
+    if (game.held_piece != None):
+        held_piece_offset_x = 150 // 2 - (5 * CELL_SIZE)//2
+        held_piece_offset_y = 150 // 2 - (5 * CELL_SIZE)//2
+
+        held_piece_copy = copy.deepcopy(game.held_piece)
+        held_piece_copy.x = 0
+        held_piece_copy.y = 0
+
+        draw_small_tetromino(hold_box_surface, held_piece_copy, held_piece_offset_x, held_piece_offset_y)
+
+    #hold box surface, always drawn regardless of if piece is held or not
+    screen.blit(hold_box_surface, (HOLD_BOX_X_OFFSET, HOLD_BOX_Y_OFFSET))
     hold_text_rect = pygame.Rect(
         HOLD_BOX_X_OFFSET,
         HOLD_BOX_Y_OFFSET,
@@ -241,8 +254,6 @@ def draw(game_state):
         150
     )
     pygame.draw.rect(screen, BLACK, hold_text_rect, width=2)
-    #Held piece in the hold box
-    #TODO 
 
     #Drawing filled cells
     for i in range(GRID_WIDTH):
@@ -353,6 +364,9 @@ def handle_inputs(game_state) -> bool:
                 move_piece(piece=game.current_piece, game_state=game, delta_x=0, delta_y=0, rotation_change=1)
             elif event.key == pygame.K_SPACE:
                 hard_drop(game)
+            elif event.key == pygame.K_z:
+                #function for holding pieces
+                hold_piece(game.current_piece, game)
 
     #Out of the loop to allow for holding the keys down since it checks each frame
     keys = pygame.key.get_pressed()
@@ -404,6 +418,8 @@ class TetrisGame:
         self.current_piece = current_tetromino
         self.ghost_piece = copy.deepcopy(current_tetromino)
         self.next_piece = next_tetromino
+        self.held_piece = None
+        self.held_flag = False
         self.score = 0
         self.level = 1
         self.lines_cleared = 0
@@ -494,6 +510,33 @@ def hard_drop(game_state) -> None:
     min_after = min(cells_after_drop, key=lambda x: x[1])[1]
     game.score += 2 * (min_after - min_before)
 
+#Function for holding pieces
+def hold_piece(piece, game_state):
+    game = game_state
+    if (game.held_piece == None and game.held_flag == False):
+        game.held_piece = piece
+        game.held_piece.rotation = 0
+
+        game.next_piece.x = 2
+        game.next_piece.y = -2
+        game.next_piece.rotation = 0
+
+        game.current_piece = game.next_piece
+        game.held_flag = True
+
+    elif (game.held_piece != None and game.held_flag == False):
+        temp_piece = game.held_piece
+
+        temp_piece.x = 2
+        temp_piece.y = -2
+        temp_piece.rotation = 0
+
+        game.held_piece = game.current_piece
+        game.held_piece.rotation = 0
+        game.current_piece = temp_piece
+
+        game.held_flag = True
+
 #Verifying if the piece is in a valid position
 def is_valid_position(game_state, piece) -> bool:
     game = game_state
@@ -539,6 +582,9 @@ def clear_lines(game_state) -> None:
         game.score += 500 * game.level
     elif rows_cleared == 4:
         game.score += 800 * game.level #multiplied by 1.5 if back-to-back difficult clears
+
+    #Reset hold flag to allow the player to hold the piece after a piece is dropped
+    game.held_flag = False
         
 def main():
     starting_piece = Tetromino()
